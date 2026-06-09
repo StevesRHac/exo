@@ -1,0 +1,13 @@
+#include "test.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+
+// foo(
+
+// )
+void foo( void *ctxt ) {
+uint64_t a;
+a = a + ((uint64_t) 3);
+}
+

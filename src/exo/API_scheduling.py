@@ -325,6 +325,8 @@ class TypeAbbrevA(ArgumentProcessor):
         ExoType.UI8: T.uint8,
         "ui16": T.uint16,
         ExoType.UI16: T.ui16,
+        "ui64": T.uint64,
+        ExoType.UI64: T.ui64,
         "i32": T.int32,
         ExoType.I32: T.i32,
     }

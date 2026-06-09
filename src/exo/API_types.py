@@ -13,6 +13,7 @@ class ExoType(Enum):
     UI8 = auto()
     I8 = auto()
     UI16 = auto()
+    UI64 = auto()
     I32 = auto()
     R = auto()
     Index = auto()
@@ -32,6 +33,7 @@ class ExoType(Enum):
             ExoType.I8,
             ExoType.UI8,
             ExoType.UI16,
+            ExoType.UI64,
             ExoType.I32,
             ExoType.R,
         ]
@@ -48,6 +50,7 @@ def loopir_type_to_exotype(typ: T) -> ExoType:
         LoopIR.UINT8: ExoType.UI8,
         LoopIR.INT8: ExoType.I8,
         LoopIR.UINT16: ExoType.UI16,
+        LoopIR.UINT64: ExoType.UI64,
         LoopIR.INT32: ExoType.I32,
         LoopIR.Num: ExoType.R,
         LoopIR.Index: ExoType.Index,

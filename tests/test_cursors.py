@@ -183,12 +183,18 @@ def test_type_and_shape_introspection():
         c: i8[n]
         d: f32[n]
         e: f64[2]
+        f: ui8[n]
+        g: ui16[n]
+        h: ui64[n]
 
     assert foo.find("a:_").type() == ExoType.R
     assert foo.find("b:_").type() == ExoType.I32
     assert foo.find("c:_").type() == ExoType.I8
     assert foo.find("d:_").type() == ExoType.F32
     assert foo.find("e:_").type() == ExoType.F64
+    assert foo.find("f:_").type() == ExoType.UI8
+    assert foo.find("g:_").type() == ExoType.UI16
+    assert foo.find("h:_").type() == ExoType.UI64
     assert foo.args()[0].type() == ExoType.Size
     assert foo.args()[1].type() == ExoType.Index
     assert foo.args()[2].type() == ExoType.Bool

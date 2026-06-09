@@ -579,6 +579,17 @@ def test_coercion_to_ui16(golden):
     assert c_file == golden
 
 
+def test_coercion_to_ui64(golden):
+    @proc
+    def foo():
+        a: ui64
+        a = a + 3
+
+    c_file, _ = compile_procs_to_strings([foo], "test.h")
+
+    assert c_file == golden
+
+
 def test_coercion_to_i32(golden):
     @proc
     def foo():
@@ -727,3 +738,12 @@ def test_window_of_window_codegen(compiler):
         for n in range(0, 2):
             expected[3, 3, 5 + n] = 137.0
         np.testing.assert_almost_equal(dst, expected)
+
+
+def test_ui64_window_codegen(golden):
+    @proc
+    def foo(x: [ui64][4]):
+        pass
+
+    c_file, _ = compile_procs_to_strings([foo], "test.h")
+    assert c_file == golden

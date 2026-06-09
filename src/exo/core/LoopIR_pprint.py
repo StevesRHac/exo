@@ -296,6 +296,8 @@ class UAST_PPrinter:
             return "ui8"
         elif isinstance(t, UAST.UINT16):
             return "ui16"
+        elif isinstance(t, UAST.UINT64):
+            return "ui64"
         elif isinstance(t, UAST.INT32):
             return "i32"
         elif isinstance(t, UAST.Bool):
@@ -534,6 +536,8 @@ def _print_type(t, env: PrintEnv) -> str:
         return "ui8"
     elif isinstance(t, T.UINT16):
         return "ui16"
+    elif isinstance(t, T.UINT64):
+        return "ui64"
     elif isinstance(t, T.INT32):
         return "i32"
     elif isinstance(t, T.Bool):

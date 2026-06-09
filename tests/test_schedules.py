@@ -2121,6 +2121,24 @@ def test_set_precision_api_type(golden):
     assert str(bar) == golden
 
 
+def test_set_precision_ui64():
+    @proc
+    def foo(n: size, x: R[n]):
+        pass
+
+    foo = set_precision(foo, "x", "ui64")
+    assert foo.args()[1].type() == ExoType.UI64
+
+
+def test_set_precision_ui64_api_type():
+    @proc
+    def foo(n: size, x: R[n]):
+        pass
+
+    foo = set_precision(foo, "x", ExoType.UI64)
+    assert foo.args()[1].type() == ExoType.UI64
+
+
 def test_set_precision_illegal_precision_value():
     @proc
     def bar(n: size, x: R[n]):

@@ -597,6 +597,7 @@ class TypeChecker:
         UAST.INT8: T.int8,
         UAST.UINT8: T.uint8,
         UAST.UINT16: T.uint16,
+        UAST.UINT64: T.uint64,
         UAST.INT32: T.int32,
         UAST.Bool: T.bool,
         UAST.Int: T.int,

@@ -1,0 +1,12 @@
+#include "test.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+
+// foo(
+//     x : [ui64][4] @DRAM
+// )
+void foo( void *ctxt, struct exo_win_1ui64c x ) {
+; // NO-OP
+}
+

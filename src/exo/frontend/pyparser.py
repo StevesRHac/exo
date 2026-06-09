@@ -609,6 +609,7 @@ _prim_types = {
     "i8": UAST.INT8(),
     "ui8": UAST.UINT8(),
     "ui16": UAST.UINT16(),
+    "ui64": UAST.UINT64(),
     "i32": UAST.INT32(),
 }
 
