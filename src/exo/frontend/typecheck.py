@@ -507,21 +507,12 @@ class TypeChecker:
                 if lhs.type != T.ui64:
                     self.err(lhs, "shift lhs must have type 'ui64'")
                     typ = T.err
+                elif not rhs.type.is_indexable() and _eval_compile_time_int(rhs) is None:
+                    self.err(rhs, "shift amount must be an indexable integer")
+                    typ = T.err
                 else:
                     typ = T.ui64
 
-                shift_amount = _eval_compile_time_int(rhs)
-                if shift_amount is None:
-                    self.err(
-                        rhs, "shift amount must be a compile-time integer constant"
-                    )
-                    typ = T.err
-                elif not 0 <= shift_amount <= 63:
-                    self.err(
-                        rhs,
-                        f"shift amount must be between 0 and 63, got {shift_amount}",
-                    )
-                    typ = T.err
             elif e.op in ("+", "-", "*", "/", "%"):
                 if lhs.type.is_real_scalar():
                     if not rhs.type.is_real_scalar():

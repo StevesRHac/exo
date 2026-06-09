@@ -6,6 +6,7 @@ from pysmt import shortcuts as SMT
 
 from ..core.LoopIR import LoopIR, T, Operator, Config
 from ..core.prelude import *
+from .typecheck import _eval_compile_time_int
 
 
 # --------------------------------------------------------------------------- #
@@ -848,6 +849,55 @@ class CheckBounds:
             for e in es:
                 self.check_in_bounds(sym, shape, e, y)
 
+    def check_shift_amount(self, amount, node):
+        if (value := _eval_compile_time_int(amount)) is not None:
+            if not 0 <= value < 64:
+                self.err(node, "shift amount may be outside [0, 64).")
+            return
+
+        amount_smt = self.expr_to_smt(lift_expr(amount))
+
+        valid = SMT.And(
+            SMT.LE(SMT.Int(0), amount_smt),
+            SMT.LT(amount_smt, SMT.Int(64)),
+        )
+
+        if not self.solver.is_valid(valid):
+            eg = self.counter_example()
+            self.err(
+                node,
+                f"shift amount may be outside [0, 64) when:\n  {eg}."
+            )
+
+    def check_expr_safety(self, e):
+        if isinstance(e, LoopIR.BinOp):
+            self.check_expr_safety(e.lhs)
+            self.check_expr_safety(e.rhs)
+
+            if e.op in ("<<", ">>"):
+                self.check_shift_amount(e.rhs, e)
+
+        elif isinstance(e, LoopIR.USub):
+            self.check_expr_safety(e.arg)
+
+        elif isinstance(e, LoopIR.Read):
+            for idx in e.idx:
+                self.check_expr_safety(idx)
+
+        elif isinstance(e, LoopIR.Extern):
+            for arg in e.args:
+                self.check_expr_safety(arg)
+
+        elif isinstance(e, LoopIR.WindowExpr):
+            for access in e.idx:
+                if isinstance(access, LoopIR.Interval):
+                    self.check_expr_safety(access.lo)
+                    self.check_expr_safety(access.hi)
+                elif isinstance(access, LoopIR.Point):
+                    self.check_expr_safety(access.pt)
+                else:
+                    assert False, "bad window access case"
+
     def check_pos_size(self, expr):
         e_pos = SMT.LT(SMT.Int(0), self.expr_to_smt(expr))
         if not self.solver.is_valid(e_pos):
@@ -912,7 +962,7 @@ class CheckBounds:
             else:
                 pass
 
-    def map_stmts(self, body, type_env):
+    def map_stmts(self, body, type_env, check_exprs=True):
         """
         Returns an effect for the argument `body`
         And also checks bounds/parallelism for any
@@ -932,6 +982,10 @@ class CheckBounds:
 
                 stmt_eff = eff_concat(rhs_eff, effects)
                 body_eff = eff_concat(stmt_eff, body_eff)
+                if check_exprs:
+                    self.check_expr_safety(stmt.rhs)
+                    for idx in stmt.idx:
+                        self.check_expr_safety(idx)
 
             elif isinstance(stmt, LoopIR.WriteConfig):
                 rhs_eff = self.eff_e(stmt.rhs, type_env)
@@ -942,9 +996,15 @@ class CheckBounds:
                 cw_eff = eff_config_write(stmt.config, stmt.field, rhs, stmt.srcinfo)
                 stmt_eff = eff_concat(rhs_eff, cw_eff)
                 body_eff = eff_concat(stmt_eff, body_eff)
+                if check_exprs:
+                    self.check_expr_safety(stmt.rhs)
 
             elif isinstance(stmt, LoopIR.For):
                 self.push()
+
+                if check_exprs:
+                    self.check_expr_safety(stmt.lo)
+                    self.check_expr_safety(stmt.hi)
 
                 def bd_pred(x, lo, hi, srcinfo):
                     x = E.Var(x, T.int, srcinfo)
@@ -966,7 +1026,7 @@ class CheckBounds:
                 pred, config_pred = bd_pred(stmt.iter, stmt.lo, stmt.hi, stmt.srcinfo)
                 self.solver.add_assertion(self.expr_to_smt(pred))
 
-                child_eff = self.map_stmts(stmt.body, type_env)
+                child_eff = self.map_stmts(stmt.body, type_env, check_exprs=check_exprs)
 
                 self.pop()
 
@@ -977,11 +1037,15 @@ class CheckBounds:
                 body_eff = eff_concat(stmt_eff, body_eff)
 
             elif isinstance(stmt, LoopIR.If):
+                if check_exprs:
+                    self.check_expr_safety(stmt.cond)
                 # first, do the if-branch
                 self.push()
                 cond = lift_expr(stmt.cond)
                 self.solver.add_assertion(self.expr_to_smt(cond))
-                body_effects = self.map_stmts(stmt.body, type_env)
+                body_effects = self.map_stmts(
+                    stmt.body, type_env, check_exprs=check_exprs
+                )
                 self.pop()
 
                 body_effects = eff_filter(cond, body_effects)
@@ -993,7 +1057,9 @@ class CheckBounds:
                     self.push()
                     neg_cond = cond.negate()
                     self.solver.add_assertion(self.expr_to_smt(neg_cond))
-                    orelse_effects = self.map_stmts(stmt.orelse, type_env)
+                    orelse_effects = self.map_stmts(
+                        stmt.orelse, type_env, check_exprs=check_exprs
+                    )
                     orelse_effects = eff_filter(cond.negate(), orelse_effects)
                     self.pop()
 
@@ -1001,7 +1067,11 @@ class CheckBounds:
                 body_eff = eff_concat(stmt_eff, body_eff)
 
             elif isinstance(stmt, LoopIR.Alloc):
-                shape = [lift_expr(s) for s in stmt.type.shape()]
+                shape_exprs = stmt.type.shape()
+                if check_exprs:
+                    for s in shape_exprs:
+                        self.check_expr_safety(s)
+                shape = [lift_expr(s) for s in shape_exprs]
                 # check that all sizes are positive
                 for s in shape:
                     self.check_pos_size(s)
@@ -1017,6 +1087,8 @@ class CheckBounds:
                 subst = dict()
 
                 for sig, arg in zip(stmt.f.args, stmt.args):
+                    if check_exprs:
+                        self.check_expr_safety(arg)
                     # Add type assertion from the size signature
                     if isinstance(sig.type, T.Size):
                         pos_sz = SMT.LT(SMT.Int(0), self.sym_to_smt(sig.name))
@@ -1054,7 +1126,9 @@ class CheckBounds:
 
                 # map body of the subprocedure
                 self.preprocess_stmts(stmt.f.body)
-                eff = self.map_stmts(stmt.f.body, self.rec_proc_types(stmt.f))
+                eff = self.map_stmts(
+                    stmt.f.body, self.rec_proc_types(stmt.f), check_exprs=False
+                )
                 eff = eff.subst(bind)
 
                 # translate effects occurring on windowed arguments
@@ -1080,7 +1154,11 @@ class CheckBounds:
 
                 body_eff = eff_concat(eff, body_eff)
 
-            elif isinstance(stmt, (LoopIR.Pass, LoopIR.WindowStmt)):
+            elif isinstance(stmt, LoopIR.WindowStmt):
+                if check_exprs:
+                    self.check_expr_safety(stmt.rhs)
+
+            elif isinstance(stmt, LoopIR.Pass):
                 pass
 
             else:

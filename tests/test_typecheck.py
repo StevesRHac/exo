@@ -504,27 +504,79 @@ def test_shift_amount_compile_time_constant():
 
 @pytest.mark.parametrize("amount", [-1, 64])
 def test_shift_amount_out_of_range(amount):
-    with pytest.raises(TypeError, match="shift amount must be between 0 and 63"):
+    with pytest.raises(TypeError, match=r"shift amount may be outside \[0, 64\)"):
 
         @proc
         def foo(x: ui64):
             x = x << amount
 
 
-def test_shift_amount_must_be_compile_time_integer_constant():
-    with pytest.raises(
-        TypeError, match="shift amount must be a compile-time integer constant"
-    ):
+def test_shift_amount_must_be_indexable():
+    with pytest.raises(TypeError, match="shift amount must be an indexable integer"):
 
         @proc
         def foo(x: ui64, amount: ui64):
             x = x >> amount
 
 
+def test_shift_amount_variable_requires_proven_range():
+    with pytest.raises(TypeError, match=r"shift amount may be outside \[0, 64\)"):
+
+        @proc
+        def foo(x: ui64, amount: index):
+            x = x >> amount
+
+
+def test_shift_amount_variable_with_asserted_range():
+    @proc
+    def foo(x: ui64, amount: index):
+        assert 0 <= amount and amount < 64
+        x = x >> amount
+
+
+def test_shift_amount_variable_in_subproc():
+    @proc
+    def shift(x: ui64, amount: index):
+        assert 0 <= amount and amount < 64
+        x = x >> amount
+
+    @proc
+    def caller(x: ui64, amount: index):
+        assert 0 <= amount and amount < 64
+        shift(x, amount)
+
+
+def test_shift_amount_variable_in_subproc_requires_predicate():
+    @proc
+    def shift(x: ui64, amount: index):
+        assert 0 <= amount and amount < 64
+        x = x >> amount
+
+    with pytest.raises(TypeError, match="Could not verify assertion"):
+
+        @proc
+        def caller(x: ui64, amount: index):
+            shift(x, amount)
+
+
+def test_shift_amount_loop_range():
+    @proc
+    def foo(x: ui64):
+        for amount in seq(0, 64):
+            x = x >> amount
+
+
+def test_shift_amount_loop_out_of_range():
+    with pytest.raises(TypeError, match=r"shift amount may be outside \[0, 64\)"):
+
+        @proc
+        def foo(x: ui64):
+            for amount in seq(0, 65):
+                x = x >> amount
+
+
 def test_shift_amount_must_not_be_float_constant():
-    with pytest.raises(
-        TypeError, match="shift amount must be a compile-time integer constant"
-    ):
+    with pytest.raises(TypeError, match="shift amount must be an indexable integer"):
 
         @proc
         def foo(x: ui64):
