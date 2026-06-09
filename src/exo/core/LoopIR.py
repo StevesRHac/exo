@@ -38,8 +38,9 @@ class IdentifierOrHole(str):
 comparision_ops = {"<", ">", "<=", ">=", "=="}
 arithmetic_ops = {"+", "-", "*", "/", "%"}
 logical_ops = {"and", "or"}
+shift_ops = {"<<", ">>"}
 
-front_ops = comparision_ops | arithmetic_ops | logical_ops
+front_ops = comparision_ops | arithmetic_ops | logical_ops | shift_ops
 
 
 class Operator(str):

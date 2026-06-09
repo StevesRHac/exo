@@ -760,7 +760,7 @@ class BinaryOpCursor(ExprCursor):
     Cursor pointing to an in-fix binary operation expression:
         `lhs op rhs`
     where `op` is one of:
-        + - * / % < > <= >= == and or
+        + - * / % << >> < > <= >= == and or
     """
 
     def op(self) -> str:

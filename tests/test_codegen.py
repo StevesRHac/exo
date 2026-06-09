@@ -747,3 +747,27 @@ def test_ui64_window_codegen(golden):
 
     c_file, _ = compile_procs_to_strings([foo], "test.h")
     assert c_file == golden
+
+
+def test_ui64_shift_codegen_and_execution(compiler):
+    @proc
+    def foo(x: ui64[5]):
+        x[0] = x[1] << 0
+        x[2] = x[1] << 63
+        x[3] = x[2] >> 63
+        x[4] = (x[1] + x[3]) << (1 + 2)
+
+    c_file, _ = compile_procs_to_strings([foo], "test.h")
+    assert "x[0] = x[1] << ((uint64_t) 0);" in c_file
+    assert "x[2] = x[1] << ((uint64_t) 63);" in c_file
+    assert "x[3] = x[2] >> ((uint64_t) 63);" in c_file
+    assert (
+        "x[4] = x[1] + x[3] << ((uint64_t) 1) + ((uint64_t) 2);" in c_file
+    )
+
+    fn = compiler.compile(foo)
+    x = np.array([0, 1, 0, 0, 0], dtype=np.uint64)
+    fn(None, x)
+    np.testing.assert_array_equal(
+        x, np.array([1, 1, 1 << 63, 1, 16], dtype=np.uint64)
+    )

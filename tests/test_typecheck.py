@@ -494,6 +494,51 @@ def test_binop20():
             pass
 
 
+def test_shift_amount_compile_time_constant():
+    @proc
+    def foo(x: ui64):
+        x = x << 0
+        x = x >> 63
+        x = x << (1 + 2 * 3)
+
+
+@pytest.mark.parametrize("amount", [-1, 64])
+def test_shift_amount_out_of_range(amount):
+    with pytest.raises(TypeError, match="shift amount must be between 0 and 63"):
+
+        @proc
+        def foo(x: ui64):
+            x = x << amount
+
+
+def test_shift_amount_must_be_compile_time_integer_constant():
+    with pytest.raises(
+        TypeError, match="shift amount must be a compile-time integer constant"
+    ):
+
+        @proc
+        def foo(x: ui64, amount: ui64):
+            x = x >> amount
+
+
+def test_shift_amount_must_not_be_float_constant():
+    with pytest.raises(
+        TypeError, match="shift amount must be a compile-time integer constant"
+    ):
+
+        @proc
+        def foo(x: ui64):
+            x = x << 3.0
+
+
+def test_shift_lhs_must_be_ui64():
+    with pytest.raises(TypeError, match="shift lhs must have type 'ui64'"):
+
+        @proc
+        def foo(x: i32):
+            x = x << 3
+
+
 def test_proj_bad():
     msg = "type-shape of calling argument may not equal the required type-shape"
 

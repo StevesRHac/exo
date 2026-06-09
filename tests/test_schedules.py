@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from exo import ParseFragmentError, proc, DRAM, Procedure, config
+from exo.frontend.parse_fragment import parse_fragment
 from exo.libs.memories import GEMM_SCRATCH
 from exo.stdlib.scheduling import *
 from exo.platforms.x86 import *
@@ -400,6 +401,25 @@ def test_simplify_loop_bounds(golden):
             pass
 
     assert str(simplify(foo)) == golden
+
+
+def test_simplify_shift_amount():
+    @proc
+    def foo(x: ui64):
+        x = x << (1 + 2 * 3)
+
+    assert "x = x << 7" in str(simplify(foo))
+
+
+def test_shift_parse_fragment():
+    @proc
+    def foo(x: ui64):
+        x = x << 3
+
+    ir = foo._loopir_proc
+    shift = parse_fragment(ir, "x << 4", ir.body[0])
+    assert str(shift) == "x << 4"
+    assert shift.type == ir.args[0].type
 
 
 def test_simplify_nested_div(golden):

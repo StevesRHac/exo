@@ -45,6 +45,16 @@ def test_unary_neg(golden):
     assert str(to_uast(negate_array)) == golden
 
 
+def test_shift_parse_and_precedence():
+    def shift(x: ui64):  # pragma: no cover
+        x = (x + 1) << 3
+        x = x >> (1 + 2)
+
+    shift_uast = str(to_uast(shift))
+    assert "x = x + 1 << 3" in shift_uast
+    assert "x = x >> 1 + 2" in shift_uast
+
+
 def test_alloc_nest(golden):
     def alloc_nest(
         n: size, m: size, x: R[n, m], y: R[n, m] @ DRAM, res: R[n, m] @ DRAM

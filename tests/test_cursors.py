@@ -202,6 +202,18 @@ def test_type_and_shape_introspection():
     assert foo.find("e : _").shape()[0].type() == ExoType.Int
 
 
+def test_shift_binary_op_cursor():
+    @proc
+    def foo(x: ui64):
+        x = x << 3
+
+    shift = foo.find("_ << _")
+    assert isinstance(shift, BinaryOpCursor)
+    assert shift.op() == "<<"
+    assert shift.lhs().type() == ExoType.UI64
+    assert shift.rhs().type() == ExoType.R
+
+
 def test_expand_dim_forwarding(golden):
     @proc
     def scal(n: size, alpha: R, x: [R][n]):

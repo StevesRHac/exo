@@ -30,6 +30,35 @@ from ..core.memory import *
 # --------------------------------------------------------------------------- #
 # Helper functions
 
+
+def _eval_compile_time_int(e):
+    if isinstance(e, LoopIR.Const):
+        return e.val if type(e.val) is int else None
+
+    if isinstance(e, LoopIR.USub):
+        arg = _eval_compile_time_int(e.arg)
+        return -arg if arg is not None else None
+
+    if isinstance(e, LoopIR.BinOp):
+        lhs = _eval_compile_time_int(e.lhs)
+        rhs = _eval_compile_time_int(e.rhs)
+        if lhs is None or rhs is None:
+            return None
+
+        if e.op == "+":
+            return lhs + rhs
+        if e.op == "-":
+            return lhs - rhs
+        if e.op == "*":
+            return lhs * rhs
+        if e.op == "<<":
+            return lhs << rhs
+        if e.op == ">>":
+            return lhs >> rhs
+
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # --------------------------------------------------------------------------- #
 # The typechecker
@@ -474,6 +503,25 @@ class TypeChecker:
                             f"comparison op: {e.op}",
                         )
                 typ = T.bool
+            elif e.op in ("<<", ">>"):
+                if lhs.type != T.ui64:
+                    self.err(lhs, "shift lhs must have type 'ui64'")
+                    typ = T.err
+                else:
+                    typ = T.ui64
+
+                shift_amount = _eval_compile_time_int(rhs)
+                if shift_amount is None:
+                    self.err(
+                        rhs, "shift amount must be a compile-time integer constant"
+                    )
+                    typ = T.err
+                elif not 0 <= shift_amount <= 63:
+                    self.err(
+                        rhs,
+                        f"shift amount must be between 0 and 63, got {shift_amount}",
+                    )
+                    typ = T.err
             elif e.op in ("+", "-", "*", "/", "%"):
                 if lhs.type.is_real_scalar():
                     if not rhs.type.is_real_scalar():

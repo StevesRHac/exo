@@ -372,6 +372,8 @@ class ParseFragment:
     def type_for_binop(self, op, lhs, rhs):
         if (lhs.type is T.size and rhs.type is T.size) and (op == "+" or op == "*"):
             return T.size
+        if op == "<<" or op == ">>":
+            return lhs.type
 
         return {
             "+": T.index,
