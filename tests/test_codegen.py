@@ -46,6 +46,19 @@ def test_free(compiler):
     compiler.compile(foo)
 
 
+@pytest.mark.parametrize("case", ["bracketed-id"])
+def test_parameterized_compiler_fixture_name(compiler, case):
+    assert case == "bracketed-id"
+    assert "[" not in compiler.basename
+    assert "]" not in compiler.basename
+
+    @proc
+    def foo():
+        pass
+
+    compiler.compile(foo)
+
+
 def test_free2(compiler):
     @proc
     def foo():

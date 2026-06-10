@@ -117,7 +117,6 @@ def test_replace_pclmulqdq_reference(instruction, immediate, a_lane, b_lane):
 def test_pclmulqdq_execution(compiler, instruction, immediate, a_lane, b_lane):
     fn = compiler.compile(
         pclmulqdq_wrapper(instruction),
-        skip_on_fail=True,
         CMAKE_C_FLAGS="-mpclmul",
     )
 

@@ -75,7 +75,8 @@ def golden(request):
 
 @pytest.fixture
 def compiler(tmp_path, request):
-    return Compiler(tmp_path, request.node.name)
+    basename = re.sub(r"[^A-Za-z0-9_.+-]", "_", request.node.name)
+    return Compiler(tmp_path, basename)
 
 
 @pytest.fixture
