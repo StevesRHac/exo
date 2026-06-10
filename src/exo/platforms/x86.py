@@ -30,6 +30,15 @@ def mm_loadu_si128(dst: [ui64][2] @ XMM, src: [ui64][2] @ DRAM):
         dst[i] = src[i]
 
 
+@instr("{dst_data} = _mm_loadl_epi64((const __m128i *) &{src_data});")
+def mm_loadl_epi64(dst: [ui64][2] @ XMM, src: [ui64][1] @ DRAM):
+    assert stride(src, 0) == 1
+    assert stride(dst, 0) == 1
+
+    dst[0] = src[0]
+    dst[1] = 0
+
+
 @instr("_mm_storeu_si128((__m128i *) &{dst_data}, {src_data});")
 def mm_storeu_si128(dst: [ui64][2] @ DRAM, src: [ui64][2] @ XMM):
     assert stride(src, 0) == 1
@@ -37,6 +46,44 @@ def mm_storeu_si128(dst: [ui64][2] @ DRAM, src: [ui64][2] @ XMM):
 
     for i in seq(0, 2):
         dst[i] = src[i]
+
+
+@instr("{dst_data} = _mm_setzero_si128();")
+def mm_setzero_si128(dst: [ui64][2] @ XMM):
+    assert stride(dst, 0) == 1
+
+    for i in seq(0, 2):
+        dst[i] = 0
+
+
+@instr("{out_data} = _mm_xor_si128({x_data}, {y_data});")
+def mm_xor_si128(
+    out: [ui64][2] @ XMM, x: [ui64][2] @ XMM, y: [ui64][2] @ XMM
+):
+    assert stride(out, 0) == 1
+    assert stride(x, 0) == 1
+    assert stride(y, 0) == 1
+
+    for i in seq(0, 2):
+        out[i] = x[i] ^ y[i]
+
+
+@instr("{dst_data} = _mm_xor_si128({dst_data}, {src_data});")
+def mm_xor_si128_inplace(dst: [ui64][2] @ XMM, src: [ui64][2] @ XMM):
+    assert stride(dst, 0) == 1
+    assert stride(src, 0) == 1
+
+    for i in seq(0, 2):
+        dst[i] = dst[i] ^ src[i]
+
+
+@instr("{dst_data} = _mm_shuffle_epi32({src_data}, 0x4e);")
+def mm_swap64_si128(dst: [ui64][2] @ XMM, src: [ui64][2] @ XMM):
+    assert stride(dst, 0) == 1
+    assert stride(src, 0) == 1
+
+    dst[0] = src[1]
+    dst[1] = src[0]
 
 
 @instr("{out_data} = _mm_clmulepi64_si128({a_data}, {b_data}, 0x00);")

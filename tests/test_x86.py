@@ -31,6 +31,57 @@ def xmm_memcpy():
     return memcpy_xmm
 
 
+def xmm_load64():
+    @proc
+    def load64_xmm(dst: ui64[2] @ DRAM, src: ui64[1] @ DRAM):
+        tmp: ui64[2] @ XMM
+        mm_loadl_epi64(tmp, src)
+        mm_storeu_si128(dst, tmp)
+
+    return load64_xmm
+
+
+def xmm_zero():
+    @proc
+    def zero_xmm(dst: ui64[2] @ DRAM):
+        tmp: ui64[2] @ XMM
+        mm_setzero_si128(tmp)
+        mm_storeu_si128(dst, tmp)
+
+    return zero_xmm
+
+
+def xmm_xor():
+    @proc
+    def xor_xmm(dst: ui64[2] @ DRAM, x: ui64[2] @ DRAM, y: ui64[2] @ DRAM):
+        dst_reg: ui64[2] @ XMM
+        x_reg: ui64[2] @ XMM
+        y_reg: ui64[2] @ XMM
+        mm_loadu_si128(x_reg, x)
+        mm_loadu_si128(y_reg, y)
+        mm_xor_si128(dst_reg, x_reg, y_reg)
+        mm_storeu_si128(dst, dst_reg)
+
+    return xor_xmm
+
+
+def xmm_xor_inplace_swap():
+    @proc
+    def xor_inplace_swap_xmm(
+        dst: ui64[2] @ DRAM, x: ui64[2] @ DRAM, y: ui64[2] @ DRAM
+    ):
+        dst_reg: ui64[2] @ XMM
+        x_reg: ui64[2] @ XMM
+        y_reg: ui64[2] @ XMM
+        mm_loadu_si128(x_reg, x)
+        mm_loadu_si128(y_reg, y)
+        mm_xor_si128_inplace(x_reg, y_reg)
+        mm_swap64_si128(dst_reg, x_reg)
+        mm_storeu_si128(dst, dst_reg)
+
+    return xor_inplace_swap_xmm
+
+
 PCLMULQDQ_INSTRUCTIONS = [
     (mm_clmulepi64_si128_00, "0x00", 0, 0),
     (mm_clmulepi64_si128_01, "0x01", 1, 0),
@@ -81,21 +132,57 @@ def clmul64_reference(a, b):
 
 def test_xmm_ui64_codegen():
     c_code = xmm_memcpy().c_code_str()
+    load64_code = xmm_load64().c_code_str()
     assert "__m128i tmp;" in c_code
     assert "tmp = _mm_loadu_si128((const __m128i *) &src[0]);" in c_code
     assert "_mm_storeu_si128((__m128i *) &dst[0], tmp);" in c_code
+    assert "tmp = _mm_loadl_epi64((const __m128i *) &src[0]);" in load64_code
+
+
+def test_xmm_ui64_zero_xor_codegen():
+    zero_code = xmm_zero().c_code_str()
+    xor_code = xmm_xor().c_code_str()
+    xor_inplace_swap_code = xmm_xor_inplace_swap().c_code_str()
+
+    assert "tmp = _mm_setzero_si128();" in zero_code
+    assert "dst_reg = _mm_xor_si128(x_reg, y_reg);" in xor_code
+    assert "x_reg = _mm_xor_si128(x_reg, y_reg);" in xor_inplace_swap_code
+    assert "dst_reg = _mm_shuffle_epi32(x_reg, 0x4e);" in xor_inplace_swap_code
 
 
 @pytest.mark.isa("SSE2")
 def test_xmm_ui64_load_store_execution(compiler):
     fn = compiler.compile(
-        xmm_memcpy(), skip_on_fail=True, CMAKE_C_FLAGS="-msse2"
+        [xmm_memcpy(), xmm_load64()], skip_on_fail=True, CMAKE_C_FLAGS="-msse2"
     )
 
     src = np.array([0x0123456789ABCDEF, 0xFEDCBA9876543210], dtype=np.uint64)
     dst = np.zeros(2, dtype=np.uint64)
-    fn(None, dst, src)
+    getattr(fn, "memcpy_xmm")(None, dst, src)
     np.testing.assert_array_equal(dst, src)
+
+    getattr(fn, "load64_xmm")(None, dst, src[:1])
+    np.testing.assert_array_equal(dst, np.array([src[0], 0], dtype=np.uint64))
+
+
+@pytest.mark.isa("SSE2")
+def test_xmm_ui64_zero_xor_execution(compiler):
+    fn = compiler.compile(
+        [xmm_zero(), xmm_xor(), xmm_xor_inplace_swap()], CMAKE_C_FLAGS="-msse2"
+    )
+
+    x = np.array([0x0123456789ABCDEF, 0xFEDCBA9876543210], dtype=np.uint64)
+    y = np.array([0x1111111111111111, 0x8000000000000001], dtype=np.uint64)
+    dst = np.full(2, np.iinfo(np.uint64).max, dtype=np.uint64)
+
+    getattr(fn, "zero_xmm")(None, dst)
+    np.testing.assert_array_equal(dst, np.zeros(2, dtype=np.uint64))
+
+    getattr(fn, "xor_xmm")(None, dst, x, y)
+    np.testing.assert_array_equal(dst, np.bitwise_xor(x, y))
+
+    getattr(fn, "xor_inplace_swap_xmm")(None, dst, x, y)
+    np.testing.assert_array_equal(dst, np.bitwise_xor(x, y)[::-1])
 
 
 @pytest.mark.parametrize("instruction, immediate, a_lane, b_lane", PCLMULQDQ_INSTRUCTIONS)
@@ -143,6 +230,20 @@ def test_replace_xmm_ui64_load_store():
 
     assert "mm_loadu_si128(tmp[0:2], src[0:2])" in str(memcpy_xmm)
     assert "mm_storeu_si128(dst[0:2], tmp[0:2])" in str(memcpy_xmm)
+
+
+def test_replace_xmm_ui64_zero_xor():
+    @proc
+    def zero_xor_xmm(out: ui64[2] @ XMM, x: ui64[2] @ XMM, y: ui64[2] @ XMM):
+        for i in seq(0, 2):
+            out[i] = 0
+        for i in seq(0, 2):
+            out[i] = x[i] ^ y[i]
+
+    zero_xor_xmm = replace_all(zero_xor_xmm, [mm_setzero_si128, mm_xor_si128])
+
+    assert "mm_setzero_si128(out[0:2])" in str(zero_xor_xmm)
+    assert "mm_xor_si128(out[0:2], x[0:2], y[0:2])" in str(zero_xor_xmm)
 
 
 def test_xmm_rejects_non_ui64():
