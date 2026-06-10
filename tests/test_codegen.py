@@ -761,7 +761,7 @@ def test_ui64_shift_codegen_and_execution(compiler):
     assert "x[0] = x[1] << 0;" in c_file
     assert "x[2] = x[1] << 63;" in c_file
     assert "x[3] = x[2] >> 63;" in c_file
-    assert "x[4] = x[1] + x[3] << 1 + 2;" in c_file
+    assert "x[4] = x[1] + x[3] << (1 + 2);" in c_file
 
     fn = compiler.compile(foo)
     x = np.array([0, 1, 0, 0, 0], dtype=np.uint64)
@@ -778,7 +778,7 @@ def test_ui64_index_expression_shift_codegen_and_execution(compiler):
             x[0] = x[1] >> (64 - amount)
 
     c_file, _ = compile_procs_to_strings([foo], "test.h")
-    assert "x[0] = x[1] >> 64 - amount;" in c_file
+    assert "x[0] = x[1] >> (64 - amount);" in c_file
 
     fn = compiler.compile(foo)
     x = np.array([0, 1 << 63], dtype=np.uint64)

@@ -1039,7 +1039,8 @@ class Compiler:
                 op = "||"
 
             lhs = self.comp_e(e.lhs, local_prec)
-            rhs = self.comp_e(e.rhs, local_prec + 1)
+            rhs_prec = op_prec["~"] if e.op in ("<<", ">>") else local_prec + 1
+            rhs = self.comp_e(e.rhs, rhs_prec)
 
             if int_div:
                 if self.range_env.check_expr_bound(0, IndexRangeEnvironment.leq, e):
