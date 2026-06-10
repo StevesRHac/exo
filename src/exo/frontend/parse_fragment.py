@@ -374,6 +374,8 @@ class ParseFragment:
             return T.size
         if op == "<<" or op == ">>":
             return lhs.type
+        if op == "&" or op == "^":
+            return T.ui64
 
         return {
             "+": T.index,

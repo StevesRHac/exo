@@ -169,6 +169,9 @@ class PrecisionAnalysis(LoopIR_Rewrite):
             lhs = self.apply_e(e.lhs)
             rhs = self.apply_e(e.rhs)
 
+            if e.op in ("<<", ">>"):
+                return LoopIR.BinOp(e.op, lhs, rhs, e.type, e.srcinfo)
+
             # first let's get the index expressions
             # and booleans out of the way
             if not e.type.is_numeric():

@@ -411,6 +411,14 @@ def test_simplify_shift_amount():
     assert "x = x << 7" in str(simplify(foo))
 
 
+def test_simplify_ui64_bitwise_constants():
+    @proc
+    def foo(x: ui64):
+        x = 6 & 3
+
+    assert "x = 2" in str(simplify(foo))
+
+
 def test_shift_parse_fragment():
     @proc
     def foo(x: ui64):
@@ -420,6 +428,17 @@ def test_shift_parse_fragment():
     shift = parse_fragment(ir, "x << 4", ir.body[0])
     assert str(shift) == "x << 4"
     assert shift.type == ir.args[0].type
+
+
+def test_ui64_bitwise_parse_fragment():
+    @proc
+    def foo(x: ui64):
+        x = x & 3
+
+    ir = foo._loopir_proc
+    bitwise = parse_fragment(ir, "x ^ 4", ir.body[0])
+    assert str(bitwise) == "x ^ 4"
+    assert bitwise.type == ir.args[0].type
 
 
 def test_simplify_nested_div(golden):

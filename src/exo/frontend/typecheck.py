@@ -55,6 +55,10 @@ def _eval_compile_time_int(e):
             return lhs << rhs
         if e.op == ">>":
             return lhs >> rhs
+        if e.op == "&":
+            return lhs & rhs
+        if e.op == "^":
+            return lhs ^ rhs
 
     return None
 
@@ -476,7 +480,9 @@ class TypeChecker:
 
         elif isinstance(e, UAST.BinOp):
             lhs = self.check_e(e.lhs, is_index=is_index)
-            rhs = self.check_e(e.rhs, is_index=is_index)
+            rhs = self.check_e(
+                e.rhs, is_index=True if e.op in ("<<", ">>") else is_index
+            )
             typ = T.err
             if lhs.type == T.err or rhs.type == T.err:
                 typ = T.err
@@ -512,6 +518,26 @@ class TypeChecker:
                     typ = T.err
                 else:
                     typ = T.ui64
+
+            elif e.op in ("&", "^"):
+                operands = [lhs, rhs]
+                typ = T.ui64
+                for i, operand in enumerate(operands):
+                    if operand.type == T.ui64:
+                        continue
+
+                    value = _eval_compile_time_int(operand)
+                    if value is not None and 0 <= value < 2**64:
+                        operands[i] = LoopIR.Const(value, T.ui64, operand.srcinfo)
+                    else:
+                        self.err(
+                            operand,
+                            f"bitwise '{e.op}' operands must have type 'ui64' "
+                            "or be non-negative integer constants representable as 'ui64'",
+                        )
+                        typ = T.err
+
+                lhs, rhs = operands
 
             elif e.op in ("+", "-", "*", "/", "%"):
                 if lhs.type.is_real_scalar():

@@ -39,8 +39,9 @@ comparision_ops = {"<", ">", "<=", ">=", "=="}
 arithmetic_ops = {"+", "-", "*", "/", "%"}
 logical_ops = {"and", "or"}
 shift_ops = {"<<", ">>"}
+bitwise_ops = {"&", "^"}
 
-front_ops = comparision_ops | arithmetic_ops | logical_ops | shift_ops
+front_ops = comparision_ops | arithmetic_ops | logical_ops | shift_ops | bitwise_ops
 
 
 class Operator(str):

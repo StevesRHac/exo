@@ -494,6 +494,41 @@ def test_binop20():
             pass
 
 
+def test_ui64_bitwise_ops():
+    @proc
+    def foo(x: ui64, y: ui64):
+        x = x & y
+        x = x ^ y
+        x = x & 0
+        x = 18446744073709551615 ^ x
+        x = 6 & 3
+
+
+@pytest.mark.parametrize("value", [-1, 2**64])
+def test_ui64_bitwise_ops_reject_unrepresentable_constants(value):
+    with pytest.raises(TypeError, match="non-negative integer constants representable"):
+
+        @proc
+        def foo(x: ui64):
+            x = x & value
+
+
+def test_ui64_bitwise_ops_reject_non_ui64_variables():
+    with pytest.raises(TypeError, match="bitwise '&' operands must have type 'ui64'"):
+
+        @proc
+        def foo(x: ui64, y: index):
+            x = x & y
+
+
+def test_ui64_bitwise_ops_reject_non_integer_constants():
+    with pytest.raises(TypeError, match=r"bitwise '\^' operands must have type 'ui64'"):
+
+        @proc
+        def foo(x: ui64):
+            x = x ^ 1.5
+
+
 def test_shift_amount_compile_time_constant():
     @proc
     def foo(x: ui64):
@@ -532,6 +567,22 @@ def test_shift_amount_variable_with_asserted_range():
     def foo(x: ui64, amount: index):
         assert 0 <= amount and amount < 64
         x = x >> amount
+
+
+def test_shift_amount_index_expression():
+    @proc
+    def foo(x: ui64):
+        for amount in seq(1, 64):
+            x = x >> (64 - amount)
+
+
+def test_shift_amount_index_expression_out_of_range():
+    with pytest.raises(TypeError, match=r"shift amount may be outside \[0, 64\)"):
+
+        @proc
+        def foo(x: ui64):
+            for amount in seq(0, 64):
+                x = x >> (64 - amount)
 
 
 def test_shift_amount_variable_in_subproc():

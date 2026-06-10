@@ -3327,6 +3327,10 @@ class DoSimplify(Cursor_Rewrite):
             return lhs.val << rhs.val
         if op == ">>":
             return lhs.val >> rhs.val
+        if op == "&":
+            return lhs.val & rhs.val
+        if op == "^":
+            return lhs.val ^ rhs.val
         raise ValueError(f"Unknown operator ({op})")
 
     @staticmethod
