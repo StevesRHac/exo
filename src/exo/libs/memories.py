@@ -184,6 +184,47 @@ class GEMM_ACCUM(Memory):
         )
 
 
+# ----------- XMM registers ----------------
+
+
+class XMM(Memory):
+    @classmethod
+    def global_(cls):
+        return "#include <immintrin.h>"
+
+    @classmethod
+    def alloc(cls, new_name, prim_type, shape, srcinfo):
+        if not shape:
+            raise MemGenError(f"{srcinfo}: XMM vectors are not scalar values")
+        if prim_type != "uint64_t":
+            raise MemGenError(f"{srcinfo}: XMM vectors must be ui64, got {prim_type}")
+        if not _is_const_size(shape[-1], 2):
+            raise MemGenError(
+                f"{srcinfo}: XMM vectors of type ui64 must be 2-wide, got {shape}"
+            )
+
+        shape = shape[:-1]
+        if shape:
+            return f'__m128i {new_name}[{"][".join(map(str, shape))}];'
+        return f"__m128i {new_name};"
+
+    @classmethod
+    def can_read(cls):
+        return False
+
+    @classmethod
+    def free(cls, new_name, prim_type, shape, srcinfo):
+        return ""
+
+    @classmethod
+    def window(cls, basetyp, baseptr, indices, strides, srcinfo):
+        assert strides[-1] == "1"
+        idxs = indices[:-1] or ""
+        if idxs:
+            idxs = "[" + "][".join(idxs) + "]"
+        return f"{baseptr}{idxs}"
+
+
 # ----------- AVX2 registers ----------------
 
 

@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from exo import proc
+from exo.libs.memories import MemGenError
 from exo.platforms.x86 import *
 from exo.stdlib.scheduling import *
 
@@ -18,6 +19,151 @@ def old_fission_after(proc, stmt_pattern, n_lifts=1):
         return [c.after() for c in p.find_all(stmt_pattern)]
 
     return loop_hack(autofission, find_stmts)(proc, n_lifts)
+
+
+def xmm_memcpy():
+    @proc
+    def memcpy_xmm(dst: ui64[2] @ DRAM, src: ui64[2] @ DRAM):
+        tmp: ui64[2] @ XMM
+        mm_loadu_si128(tmp, src)
+        mm_storeu_si128(dst, tmp)
+
+    return memcpy_xmm
+
+
+PCLMULQDQ_INSTRUCTIONS = [
+    (mm_clmulepi64_si128_00, "0x00", 0, 0),
+    (mm_clmulepi64_si128_01, "0x01", 1, 0),
+    (mm_clmulepi64_si128_10, "0x10", 0, 1),
+    (mm_clmulepi64_si128_11, "0x11", 1, 1),
+]
+
+
+def pclmulqdq_wrapper(instruction):
+    @proc
+    def wrapper(out: ui64[2] @ DRAM, a: ui64[2] @ DRAM, b: ui64[2] @ DRAM):
+        out_reg: ui64[2] @ XMM
+        a_reg: ui64[2] @ XMM
+        b_reg: ui64[2] @ XMM
+        mm_loadu_si128(a_reg, a)
+        mm_loadu_si128(b_reg, b)
+        instruction(out_reg, a_reg, b_reg)
+        mm_storeu_si128(out, out_reg)
+
+    return wrapper
+
+
+def pclmulqdq_reference_xmm(a_lane, b_lane):
+    @proc
+    def reference(out: ui64[2] @ XMM, a: ui64[2] @ XMM, b: ui64[2] @ XMM):
+        out[0] = 0
+        out[1] = 0
+        for i in seq(0, 64):
+            out[0] = out[0] ^ ((a[a_lane] << i) * ((b[b_lane] >> i) & 1))
+            if i > 0:
+                out[1] = out[1] ^ (
+                    (a[a_lane] >> (64 - i)) * ((b[b_lane] >> i) & 1)
+                )
+
+    return reference
+
+
+def clmul64_reference(a, b):
+    result = 0
+    for i in range(64):
+        if (b >> i) & 1:
+            result ^= a << i
+    return np.array(
+        [result & (2**64 - 1), result >> 64],
+        dtype=np.uint64,
+    )
+
+
+def test_xmm_ui64_codegen():
+    c_code = xmm_memcpy().c_code_str()
+    assert "__m128i tmp;" in c_code
+    assert "tmp = _mm_loadu_si128((const __m128i *) &src[0]);" in c_code
+    assert "_mm_storeu_si128((__m128i *) &dst[0], tmp);" in c_code
+
+
+@pytest.mark.isa("SSE2")
+def test_xmm_ui64_load_store_execution(compiler):
+    fn = compiler.compile(
+        xmm_memcpy(), skip_on_fail=True, CMAKE_C_FLAGS="-msse2"
+    )
+
+    src = np.array([0x0123456789ABCDEF, 0xFEDCBA9876543210], dtype=np.uint64)
+    dst = np.zeros(2, dtype=np.uint64)
+    fn(None, dst, src)
+    np.testing.assert_array_equal(dst, src)
+
+
+@pytest.mark.parametrize("instruction, immediate, a_lane, b_lane", PCLMULQDQ_INSTRUCTIONS)
+def test_pclmulqdq_codegen(instruction, immediate, a_lane, b_lane):
+    c_code = pclmulqdq_wrapper(instruction).c_code_str()
+    assert (
+        f"out_reg = _mm_clmulepi64_si128(a_reg, b_reg, {immediate});" in c_code
+    )
+
+
+@pytest.mark.parametrize("instruction, immediate, a_lane, b_lane", PCLMULQDQ_INSTRUCTIONS)
+def test_replace_pclmulqdq_reference(instruction, immediate, a_lane, b_lane):
+    reference = replace_all(pclmulqdq_reference_xmm(a_lane, b_lane), instruction)
+    assert f"{instruction.name()}(out[0:2], a[0:2], b[0:2])" in str(reference)
+
+
+@pytest.mark.isa("PCLMULQDQ")
+@pytest.mark.parametrize("instruction, immediate, a_lane, b_lane", PCLMULQDQ_INSTRUCTIONS)
+def test_pclmulqdq_execution(compiler, instruction, immediate, a_lane, b_lane):
+    fn = compiler.compile(
+        pclmulqdq_wrapper(instruction),
+        skip_on_fail=True,
+        CMAKE_C_FLAGS="-mpclmul",
+    )
+
+    a = np.array([0x0123456789ABCDEF, 0xFEDCBA9876543210], dtype=np.uint64)
+    b = np.array([0x1111111111111111, 0x8000000000000001], dtype=np.uint64)
+    out = np.zeros(2, dtype=np.uint64)
+    fn(None, out, a, b)
+    np.testing.assert_array_equal(
+        out, clmul64_reference(int(a[a_lane]), int(b[b_lane]))
+    )
+
+
+def test_replace_xmm_ui64_load_store():
+    @proc
+    def memcpy_xmm(dst: ui64[2] @ DRAM, src: ui64[2] @ DRAM):
+        tmp: ui64[2]
+        for i in seq(0, 2):
+            tmp[i] = src[i]
+        for i in seq(0, 2):
+            dst[i] = tmp[i]
+
+    memcpy_xmm = set_memory(memcpy_xmm, "tmp", XMM)
+    memcpy_xmm = replace_all(memcpy_xmm, [mm_loadu_si128, mm_storeu_si128])
+
+    assert "mm_loadu_si128(tmp[0:2], src[0:2])" in str(memcpy_xmm)
+    assert "mm_storeu_si128(dst[0:2], tmp[0:2])" in str(memcpy_xmm)
+
+
+def test_xmm_rejects_non_ui64():
+    @proc
+    def bad_xmm_type():
+        tmp: f32[2] @ XMM
+        pass
+
+    with pytest.raises(MemGenError, match="XMM vectors must be ui64"):
+        bad_xmm_type.c_code_str()
+
+
+def test_xmm_rejects_wrong_width():
+    @proc
+    def bad_xmm_width():
+        tmp: ui64[4] @ XMM
+        pass
+
+    with pytest.raises(MemGenError, match="XMM vectors of type ui64 must be 2-wide"):
+        bad_xmm_width.c_code_str()
 
 
 @pytest.mark.isa("AVX2")

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .. import instr, DRAM
-from ..libs.memories import AVX2, AVX512
+from ..libs.memories import AVX2, AVX512, XMM
 from ..libs.externs import relu, select
 
 # --------------------------------------------------------------------------- #
@@ -14,6 +14,77 @@ def prefetch(A: [R][1] @ DRAM, locality_hint: size):
     assert 0 <= locality_hint
     assert locality_hint < 8
     pass
+
+
+# --------------------------------------------------------------------------- #
+#   XMM intrinsics
+# --------------------------------------------------------------------------- #
+
+
+@instr("{dst_data} = _mm_loadu_si128((const __m128i *) &{src_data});")
+def mm_loadu_si128(dst: [ui64][2] @ XMM, src: [ui64][2] @ DRAM):
+    assert stride(src, 0) == 1
+    assert stride(dst, 0) == 1
+
+    for i in seq(0, 2):
+        dst[i] = src[i]
+
+
+@instr("_mm_storeu_si128((__m128i *) &{dst_data}, {src_data});")
+def mm_storeu_si128(dst: [ui64][2] @ DRAM, src: [ui64][2] @ XMM):
+    assert stride(src, 0) == 1
+    assert stride(dst, 0) == 1
+
+    for i in seq(0, 2):
+        dst[i] = src[i]
+
+
+@instr("{out_data} = _mm_clmulepi64_si128({a_data}, {b_data}, 0x00);")
+def mm_clmulepi64_si128_00(
+    out: [ui64][2] @ XMM, a: [ui64][2] @ XMM, b: [ui64][2] @ XMM
+):
+    out[0] = 0
+    out[1] = 0
+    for i in seq(0, 64):
+        out[0] = out[0] ^ ((a[0] << i) * ((b[0] >> i) & 1))
+        if i > 0:
+            out[1] = out[1] ^ ((a[0] >> (64 - i)) * ((b[0] >> i) & 1))
+
+
+@instr("{out_data} = _mm_clmulepi64_si128({a_data}, {b_data}, 0x01);")
+def mm_clmulepi64_si128_01(
+    out: [ui64][2] @ XMM, a: [ui64][2] @ XMM, b: [ui64][2] @ XMM
+):
+    out[0] = 0
+    out[1] = 0
+    for i in seq(0, 64):
+        out[0] = out[0] ^ ((a[1] << i) * ((b[0] >> i) & 1))
+        if i > 0:
+            out[1] = out[1] ^ ((a[1] >> (64 - i)) * ((b[0] >> i) & 1))
+
+
+@instr("{out_data} = _mm_clmulepi64_si128({a_data}, {b_data}, 0x10);")
+def mm_clmulepi64_si128_10(
+    out: [ui64][2] @ XMM, a: [ui64][2] @ XMM, b: [ui64][2] @ XMM
+):
+    out[0] = 0
+    out[1] = 0
+    for i in seq(0, 64):
+        out[0] = out[0] ^ ((a[0] << i) * ((b[1] >> i) & 1))
+        if i > 0:
+            out[1] = out[1] ^ ((a[0] >> (64 - i)) * ((b[1] >> i) & 1))
+
+
+@instr("{out_data} = _mm_clmulepi64_si128({a_data}, {b_data}, 0x11);")
+def mm_clmulepi64_si128_11(
+    out: [ui64][2] @ XMM, a: [ui64][2] @ XMM, b: [ui64][2] @ XMM
+):
+    out[0] = 0
+    out[1] = 0
+    for i in seq(0, 64):
+        out[0] = out[0] ^ ((a[1] << i) * ((b[1] >> i) & 1))
+        if i > 0:
+            out[1] = out[1] ^ ((a[1] >> (64 - i)) * ((b[1] >> i) & 1))
 
 
 # --------------------------------------------------------------------------- #
