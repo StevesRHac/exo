@@ -211,7 +211,7 @@ def test_shift_binary_op_cursor():
     assert isinstance(shift, BinaryOpCursor)
     assert shift.op() == "<<"
     assert shift.lhs().type() == ExoType.UI64
-    assert shift.rhs().type() == ExoType.R
+    assert shift.rhs().type() == ExoType.Int
 
 
 def test_expand_dim_forwarding(golden):
